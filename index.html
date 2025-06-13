@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCVersionVault</title>
+  <style>
+    body {
+      background-color: #111;
+      color: #eee;
+      font-family: monospace;
+      margin: 0;
+      padding: 1rem;
+    }
+    h1 {
+      text-align: center;
+      color: #6cf;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid #444;
+    }
+    th {
+      background-color: #222;
+      color: #6cf;
+    }
+    tr:hover {
+      background-color: #222;
+    }
+    .button {
+      background-color: #444;
+      color: #6cf;
+      border: none;
+      padding: 0.3rem 0.5rem;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .button:hover {
+      background-color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>MCVersionVault</h1>
+  <table id="versionTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Type</th>
+        <th>Release Date</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="4">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    async function loadVersions() {
+      const res = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+      const data = await res.json();
+      const tableBody = document.querySelector('#versionTable tbody');
+      tableBody.innerHTML = '';
+
+      for (const version of data.versions) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${version.id}</td>
+          <td>${version.type}</td>
+          <td>${new Date(version.releaseTime).toLocaleDateString()}</td>
+          <td><button class="button" onclick="loadDetails('${version.url}')">View</button></td>
+        `;
+        tableBody.appendChild(row);
+      }
+    }
+
+    async function loadDetails(url) {
+      const res = await fetch(url);
+      const data = await res.json();
+      const client = data.downloads.client?.url || 'N/A';
+      const server = data.downloads.server?.url || 'N/A';
+
+      alert(`Client: ${client}\nServer: ${server}`);
+    }
+
+    loadVersions();
+  </script>
+</body>
+</html>
