@@ -16,10 +16,19 @@
       text-align: center;
       color: #6cf;
     }
+    input[type="text"] {
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 0.5rem;
+      margin: 1rem 0;
+      border: 1px solid #444;
+      background-color: #222;
+      color: #eee;
+      border-radius: 4px;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 1rem;
     }
     th, td {
       padding: 0.5rem;
@@ -48,6 +57,7 @@
 </head>
 <body>
   <h1>MCVersionVault</h1>
+  <input type="text" id="searchInput" placeholder="Search for a version..." onkeyup="filterVersions()">
   <table id="versionTable">
     <thead>
       <tr>
@@ -63,31 +73,62 @@
   </table>
 
   <script>
-    async function loadVersions() {
-      const res = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
-      const data = await res.json();
+    let allVersions = [];
+
+    const observer = new IntersectionObserver(async (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const row = entry.target;
+          const url = row.getAttribute('data-url');
+          if (!row.dataset.loaded) {
+            const res = await fetch(url);
+            const data = await res.json();
+            const client = data.downloads.client?.url || 'N/A';
+            const server = data.downloads.server?.url || 'N/A';
+            const actionCell = row.querySelector('.action-cell');
+            actionCell.innerHTML = `
+              <a href="${client}" target="_blank" class="button">Client</a>
+              <a href="${server}" target="_blank" class="button">Server</a>
+            `;
+            row.dataset.loaded = 'true';
+            observer.unobserve(row);
+          }
+        }
+      }
+    }, {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1
+    });
+
+    function renderVersions(versions) {
       const tableBody = document.querySelector('#versionTable tbody');
       tableBody.innerHTML = '';
-
-      for (const version of data.versions) {
+      for (const version of versions) {
         const row = document.createElement('tr');
+        row.setAttribute('data-url', version.url);
         row.innerHTML = `
           <td>${version.id}</td>
           <td>${version.type}</td>
           <td>${new Date(version.releaseTime).toLocaleDateString()}</td>
-          <td><button class="button" onclick="loadDetails('${version.url}')">View</button></td>
+          <td class="action-cell">Loading...</td>
         `;
         tableBody.appendChild(row);
+        observer.observe(row);
       }
     }
 
-    async function loadDetails(url) {
-      const res = await fetch(url);
-      const data = await res.json();
-      const client = data.downloads.client?.url || 'N/A';
-      const server = data.downloads.server?.url || 'N/A';
+    function filterVersions() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allVersions.filter(v => v.id.toLowerCase().includes(query));
+      renderVersions(filtered);
+    }
 
-      alert(`Client: ${client}\nServer: ${server}`);
+    async function loadVersions() {
+      const res = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+      const data = await res.json();
+      allVersions = data.versions;
+      renderVersions(allVersions);
     }
 
     loadVersions();
