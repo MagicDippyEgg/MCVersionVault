@@ -172,9 +172,26 @@
     #toggle-json:checked::before {
       left: 21px;
     }
+
+    /* Style for the new "Back to Vault" button */
+    .back-button {
+      display: inline-block;
+      background-color: #333;
+      color: #eee;
+      padding: 8px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+
+    .back-button:hover {
+      background-color: #555;
+    }
   </style>
 </head>
 <body>
+  <a href="index.html" class="back-button">← Back to Vault</a>
   <h1>Minecraft Version Explorer</h1>
   <input type="text" id="search" placeholder="Search versions..." autocomplete="off" />
 
