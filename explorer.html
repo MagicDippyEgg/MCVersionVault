@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Minecraft Version Explorer</title>
+  <link rel="icon" type="image/png" href="icon.png">
+  <style>
+    body {
+      background-color: #121212;
+      color: #eee;
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.4;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+
+    #search {
+      padding: 8px;
+      width: 100%;
+      max-width: 400px;
+      border: none;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      background-color: #1e1e1e;
+      color: #fff;
+    }
+
+    .version {
+      background-color: #1e1e1e;
+      border: 1px solid #333;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .version:hover {
+      background-color: #2c2c2c;
+    }
+
+    .version-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .version-id {
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .version-info {
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    .arrow {
+      font-size: 16px;
+      transition: transform 0.2s;
+    }
+
+    .arrow.expanded {
+      transform: rotate(180deg);
+    }
+
+    .details {
+      margin-top: 10px;
+      color: #ccc;
+      font-size: 14px;
+      display: none;
+      white-space: pre-wrap;
+      max-height: 600px;
+      overflow: auto;
+      background-color: #222;
+      border-radius: 4px;
+      padding: 10px;
+      font-family: monospace, monospace;
+    }
+
+    .loading {
+      color: #888;
+      font-style: italic;
+      margin-top: 6px;
+    }
+
+    .error {
+      color: #ff6c6c;
+      font-weight: bold;
+      margin-top: 6px;
+    }
+
+    /* Recursive JSON styles */
+    .json-key {
+      color: #4ea6ea;
+      font-weight: bold;
+    }
+
+    .json-string {
+      color: #9cdcfe;
+    }
+
+    .json-number {
+      color: #b5cea8;
+    }
+
+    .json-boolean {
+      color: #dcdcaa;
+    }
+
+    .json-null {
+      color: #808080;
+    }
+
+    .json-object, .json-array {
+      margin-left: 16px;
+      border-left: 2px solid #333;
+      padding-left: 10px;
+      margin-top: 4px;
+      margin-bottom: 4px;
+    }
+
+    /* Toggle switch styling */
+    #toggle-json-wrapper {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 14px;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 9999;
+    }
+
+    #toggle-json {
+      width: 40px;
+      height: 20px;
+      -webkit-appearance: none;
+      background: #444;
+      outline: none;
+      border-radius: 20px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    #toggle-json:checked {
+      background: #4ea6ea;
+    }
+
+    #toggle-json::before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      top: 1px;
+      left: 1px;
+      background: white;
+      transition: 0.3s;
+    }
+
+    #toggle-json:checked::before {
+      left: 21px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Minecraft Version Explorer</h1>
+  <input type="text" id="search" placeholder="Search versions..." autocomplete="off" />
+
+  <div id="version-list"></div>
+
+  <div id="toggle-json-wrapper" title="Toggle between JSON and pretty info">
+    <label for="toggle-json">Show JSON</label>
+    <input type="checkbox" id="toggle-json" />
+  </div>
+
+  <script>
+    // Utility: recursive JSON pretty-print to HTML
+    function jsonToHTML(value) {
+      if (value === null) {
+        return '<span class="json-null">null</span>';
+      }
+      if (typeof value === 'string') {
+        const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return '<span class="json-string">"' + escaped + '"</span>';
+      }
+      if (typeof value === 'number') {
+        return '<span class="json-number">' + value + '</span>';
+      }
+      if (typeof value === 'boolean') {
+        return '<span class="json-boolean">' + value + '</span>';
+      }
+      if (Array.isArray(value)) {
+        let html = '<div class="json-array">[<br>';
+        for (let i = 0; i < value.length; i++) {
+          html += '<div>' + jsonToHTML(value[i]) + (i < value.length -1 ? ',' : '') + '</div>';
+        }
+        html += ']</div>';
+        return html;
+      }
+      if (typeof value === 'object') {
+        let html = '<div class="json-object">{<br>';
+        const keys = Object.keys(value);
+        keys.forEach((key, i) => {
+          html += '<div><span class="json-key">"' + key + '"</span>: ' + jsonToHTML(value[key]) + (i < keys.length -1 ? ',' : '') + '</div>';
+        });
+        html += '}</div>';
+        return html;
+      }
+      return '';
+    }
+
+    // Create pretty human-friendly summary of the full version JSON
+    function createPrettyInfo(json) {
+      // Select key fields to display prettily
+      // Add more fields if you want
+      const parts = [];
+
+      function safeGet(obj, path, fallback = 'N/A') {
+        return path.reduce((o, k) => (o && o[k] !== undefined) ? o[k] : fallback, obj);
+      }
+
+      parts.push(`<div><strong>Version ID:</strong> ${json.id || 'N/A'}</div>`);
+      parts.push(`<div><strong>Type:</strong> ${json.type || 'N/A'}</div>`);
+      parts.push(`<div><strong>Release Time:</strong> ${json.releaseTime ? new Date(json.releaseTime).toLocaleString() : 'N/A'}</div>`);
+      parts.push(`<div><strong>Main Class:</strong> ${json.mainClass || 'N/A'}</div>`);
+      parts.push(`<div><strong>Java Version:</strong> ${safeGet(json, ['javaVersion', 'component'], 'N/A')}</div>`);
+      parts.push(`<div><strong>Minimum Launcher Version:</strong> ${json.minimumLauncherVersion || 'N/A'}</div>`);
+      parts.push(`<div><strong>Asset Index ID:</strong> ${safeGet(json, ['assetIndex', 'id'], 'N/A')}</div>`);
+      parts.push(`<div><strong>Libraries Count:</strong> ${Array.isArray(json.libraries) ? json.libraries.length : 'N/A'}</div>`);
+      parts.push(`<div><strong>Arguments (Game):</strong> ${Array.isArray(safeGet(json, ['arguments', 'game'], [])) ? safeGet(json, ['arguments', 'game'], []).length : 0} items</div>`);
+
+      return parts.join('\n');
+    }
+
+    async function fetchVersions() {
+      const res = await fetch("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
+      if (!res.ok) throw new Error("Failed to load version manifest");
+      const data = await res.json();
+      return data.versions;
+    }
+
+    function createVersionElement(version, showJson) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "version";
+
+      const header = document.createElement("div");
+      header.className = "version-header";
+
+      const info = document.createElement("div");
+      info.innerHTML = `
+        <div class="version-id">${version.id}</div>
+        <div class="version-info">${version.type} • ${new Date(version.releaseTime).toLocaleDateString()}</div>
+      `;
+
+      const arrow = document.createElement("div");
+      arrow.className = "arrow";
+      arrow.textContent = "▼";
+
+      header.appendChild(info);
+      header.appendChild(arrow);
+      wrapper.appendChild(header);
+
+      const details = document.createElement("div");
+      details.className = "details";
+      wrapper.appendChild(details);
+
+      let loaded = false;
+      let fullJson = null;
+
+      wrapper.addEventListener("click", async () => {
+        const isOpen = details.style.display === "block";
+
+        if (isOpen) {
+          details.style.display = "none";
+          arrow.classList.remove("expanded");
+          return;
+        }
+
+        details.style.display = "block";
+        arrow.classList.add("expanded");
+
+        if (!loaded) {
+          details.innerHTML = '<div class="loading">Loading full metadata...</div>';
+          try {
+            const res = await fetch(version.url);
+            if (!res.ok) throw new Error("Failed to load version metadata");
+            fullJson = await res.json();
+            loaded = true;
+          } catch (e) {
+            details.innerHTML = `<div class="error">Error loading metadata: ${e.message}</div>`;
+            return;
+          }
+        }
+
+        // Show either raw JSON or pretty info depending on toggle
+        if (window.showJsonMode) {
+          details.innerHTML = jsonToHTML(fullJson);
+        } else {
+          details.innerHTML = createPrettyInfo(fullJson);
+        }
+      });
+
+      return wrapper;
+    }
+
+    function displayVersions(versions) {
+      const list = document.getElementById("version-list");
+      list.innerHTML = "";
+      const showJson = window.showJsonMode || false;
+      versions.forEach(version => {
+        list.appendChild(createVersionElement(version, showJson));
+      });
+    }
+
+    function filterVersions(versions, query) {
+      return versions.filter(v => v.id.toLowerCase().includes(query.toLowerCase()));
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      try {
+        const allVersions = await fetchVersions();
+        window.allVersions = allVersions;
+        window.showJsonMode = false;
+
+        displayVersions(allVersions);
+
+        const searchInput = document.getElementById("search");
+        searchInput.addEventListener("input", () => {
+          const filtered = filterVersions(allVersions, searchInput.value);
+          displayVersions(filtered);
+        });
+
+        const toggleJson = document.getElementById("toggle-json");
+        toggleJson.addEventListener("change", () => {
+          window.showJsonMode = toggleJson.checked;
+          // Re-display filtered list (preserves search)
+          const filtered = filterVersions(window.allVersions, searchInput.value);
+          displayVersions(filtered);
+        });
+      } catch (e) {
+        const list = document.getElementById("version-list");
+        list.innerHTML = `<div class="error">Failed to load versions: ${e.message}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>
